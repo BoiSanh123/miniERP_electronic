@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  postgres_db:
+    image: postgres:18-alpine
+    container_name: mini_erp_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: erp_admin
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: mini_erp_b2b
+    ports:
+      - "5433:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      # Dòng này cực kỳ ma thuật: Nó tự động copy file init.sql vào Docker 
+      # và chạy tự động ngay lần đầu tiên bật lên!
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql 
+
+volumes:
+  db_data:
