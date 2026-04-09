@@ -1,0 +1,419 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id               String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name             String           @unique @db.VarChar(50)
+  description      String?
+  createdAt        DateTime?        @default(now()) @map("created_at") @db.Timestamp(6)
+  role_permissions RolePermission[]
+  user_roles       UserRole[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id               String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  code             String           @unique @db.VarChar(50)
+  description      String?
+  createdAt        DateTime?        @default(now()) @map("created_at") @db.Timestamp(6)
+  role_permissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  role_id       String     @db.Uuid
+  permission_id String     @db.Uuid
+  permissions   Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  roles         Role       @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+model User {
+  id                  String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  username            String             @unique @db.VarChar(50)
+  passwordHash        String             @map("password_hash") @db.VarChar(255)
+  isActive            Boolean?           @default(true) @map("is_active")
+  createdAt           DateTime?          @default(now()) @map("created_at") @db.Timestamp(6)
+  deletedAt           DateTime?          @map("deleted_at") @db.Timestamp(6)
+  accounting_periods  AccountingPeriod[]
+  attachments         Attachment[]       @relation("UploadedBy")
+  goods_receipt_notes GoodsReceiptNote[]
+  orders              Order[]
+  payments            Payment[]
+  purchase_orders     PurchaseOrder[]
+  purchase_requests   PurchaseRequest[]
+  stock_ledger        StockLedger[]
+  user_roles          UserRole[]
+
+  @@map("users")
+}
+
+model UserRole {
+  user_id String @db.Uuid
+  role_id String @db.Uuid
+  roles   Role   @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users   User   @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([user_id, role_id])
+  @@map("user_roles")
+}
+
+model Attachment {
+  id           String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  entityType   String    @map("entity_type") @db.VarChar(50)
+  entityId     String    @map("entity_id") @db.Uuid
+  fileName     String    @map("file_name") @db.VarChar(255)
+  fileUrl      String    @map("file_url")
+  documentType String?   @map("document_type") @db.VarChar(50)
+  uploadedById String?   @map("uploaded_by") @db.Uuid
+  createdAt    DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  uploadedBy   User?     @relation("UploadedBy", fields: [uploadedById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("attachments")
+}
+
+model Category {
+  id       String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name     String     @db.VarChar(100)
+  parentId String?    @map("parent_id") @db.Uuid
+  parent   Category?  @relation("CategoryParent", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children Category[] @relation("CategoryParent")
+  products Product[]
+
+  @@map("categories")
+}
+
+model Product {
+  id             String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  sku            String          @unique @db.VarChar(50)
+  name           String          @db.VarChar(255)
+  categoryId     String?         @map("category_id") @db.Uuid
+  baseUnit       String          @map("base_unit") @db.VarChar(20)
+  displayUnit    String          @map("display_unit") @db.VarChar(20)
+  attributes     Json?
+  isActive       Boolean?        @default(true) @map("is_active")
+  createdAt      DateTime?       @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime?       @default(now()) @map("updated_at") @db.Timestamp(6)
+  inventoryRows  Inventory[]
+  orderItems     OrderItem[]
+  priceItems     PriceListItem[]
+  category       Category?       @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  stockLedgers   StockLedger[]
+  uomConversions UomConversion[]
+
+  @@index([attributes], map: "idx_products_attributes_gin", type: Gin)
+  @@map("products")
+}
+
+model UomConversion {
+  id               String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  productId        String?  @map("product_id") @db.Uuid
+  fromUnit         String   @map("from_unit") @db.VarChar(20)
+  toUnit           String   @map("to_unit") @db.VarChar(20)
+  conversionFactor Decimal  @map("conversion_factor") @db.Decimal(15, 4)
+  product          Product? @relation(fields: [productId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([productId, fromUnit, toUnit])
+  @@map("uom_conversions")
+}
+
+model PriceList {
+  id        String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  code      String          @unique @db.VarChar(50)
+  name      String          @db.VarChar(100)
+  tier      String?         @db.VarChar(20)
+  validFrom DateTime?       @map("valid_from") @db.Timestamp(6)
+  validTo   DateTime?       @map("valid_to") @db.Timestamp(6)
+  isActive  Boolean?        @default(true) @map("is_active")
+  items     PriceListItem[]
+
+  @@map("price_lists")
+}
+
+model PriceListItem {
+  id                 String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  priceListId        String?    @map("price_list_id") @db.Uuid
+  productId          String?    @map("product_id") @db.Uuid
+  unitPrice          Decimal    @map("unit_price") @db.Decimal(15, 2)
+  discountPercentage Decimal?   @default(0) @map("discount_percentage") @db.Decimal(5, 2)
+  priceList          PriceList? @relation(fields: [priceListId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product            Product?   @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([priceListId, productId])
+  @@map("price_list_items")
+}
+
+model BusinessPartner {
+  id             String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  code           String          @unique @db.VarChar(50)
+  name           String          @db.VarChar(255)
+  type           String          @db.VarChar(20)
+  tier           String?         @db.VarChar(20)
+  creditLimit    Decimal?        @default(0) @map("credit_limit") @db.Decimal(15, 2)
+  currentDebt    Decimal?        @default(0) @map("current_debt") @db.Decimal(15, 2)
+  createdAt      DateTime?       @default(now()) @map("created_at") @db.Timestamp(6)
+  deletedAt      DateTime?       @map("deleted_at") @db.Timestamp(6)
+  debtLedger     DebtLedger[]
+  orders         Order[]
+  payments       Payment[]
+  purchaseOrders PurchaseOrder[]
+
+  @@map("business_partners")
+}
+
+model Warehouse {
+  id              String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  code            String              @unique @db.VarChar(50)
+  name            String              @db.VarChar(255)
+  locationAddress String?             @map("location_address")
+  grns            GoodsReceiptNote[]
+  inventory       Inventory[]
+  ledgers         StockLedger[]
+  locations       WarehouseLocation[]
+
+  @@map("warehouses")
+}
+
+model WarehouseLocation {
+  id          String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  warehouseId String?    @map("warehouse_id") @db.Uuid
+  binCode     String     @map("bin_code") @db.VarChar(50)
+  warehouse   Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([warehouseId, binCode])
+  @@map("warehouse_locations")
+}
+
+model Inventory {
+  productId         String    @map("product_id") @db.Uuid
+  warehouseId       String    @map("warehouse_id") @db.Uuid
+  availableQuantity Decimal?  @default(0) @map("available_quantity") @db.Decimal(15, 2)
+  reservedQuantity  Decimal?  @default(0) @map("reserved_quantity") @db.Decimal(15, 2)
+  version           Int?      @default(1)
+  updatedAt         DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
+  product           Product   @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouse         Warehouse @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@id([productId, warehouseId])
+  @@map("inventory")
+}
+
+model StockLedger {
+  id                String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  productId         String?    @map("product_id") @db.Uuid
+  warehouseId       String?    @map("warehouse_id") @db.Uuid
+  transactionType   String     @map("transaction_type") @db.VarChar(20)
+  quantity          Decimal    @db.Decimal(15, 2)
+  movingAverageCost Decimal?   @map("moving_average_cost") @db.Decimal(15, 2)
+  referenceId       String?    @map("reference_id") @db.Uuid
+  createdById       String?    @map("created_by") @db.Uuid
+  createdAt         DateTime?  @default(now()) @map("created_at") @db.Timestamp(6)
+  users             User?      @relation(fields: [createdById], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product           Product?   @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouse         Warehouse? @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("stock_ledger")
+}
+
+model PurchaseRequest {
+  id              String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  prNumber        String          @unique @map("pr_number") @db.VarChar(50)
+  status          String          @db.VarChar(50)
+  requestedBy     String?         @map("requested_by") @db.Uuid
+  createdAt       DateTime?       @default(now()) @map("created_at") @db.Timestamp(6)
+  purchase_orders PurchaseOrder[]
+  users           User?           @relation(fields: [requestedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("purchase_requests")
+}
+
+model PurchaseOrder {
+  id                String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  poNumber          String             @unique @map("po_number") @db.VarChar(50)
+  prId              String?            @map("pr_id") @db.Uuid
+  supplierId        String?            @map("supplier_id") @db.Uuid
+  status            String             @db.VarChar(50)
+  totalAmount       Decimal            @default(0) @map("total_amount") @db.Decimal(15, 2)
+  createdBy         String?            @map("created_by") @db.Uuid
+  createdAt         DateTime?          @default(now()) @map("created_at") @db.Timestamp(6)
+  goodsReceiptNotes GoodsReceiptNote[]
+  users             User?              @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  purchase_requests PurchaseRequest?   @relation(fields: [prId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  supplier          BusinessPartner?   @relation(fields: [supplierId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("purchase_orders")
+}
+
+model GoodsReceiptNote {
+  id           String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  grnNumber    String         @unique @map("grn_number") @db.VarChar(50)
+  poId         String?        @map("po_id") @db.Uuid
+  warehouseId  String?        @map("warehouse_id") @db.Uuid
+  status       String         @db.VarChar(50)
+  receivedDate DateTime?      @default(now()) @map("received_date") @db.Timestamp(6)
+  createdBy    String?        @map("created_by") @db.Uuid
+  users        User?          @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  po           PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  warehouse    Warehouse?     @relation(fields: [warehouseId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("goods_receipt_notes")
+}
+
+model Order {
+  id             String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orderNumber    String           @unique @map("order_number") @db.VarChar(50)
+  customerId     String?          @map("customer_id") @db.Uuid
+  status         String           @db.VarChar(50)
+  totalAmount    Decimal          @default(0) @map("total_amount") @db.Decimal(15, 2)
+  taxAmount      Decimal          @default(0) @map("tax_amount") @db.Decimal(15, 2)
+  discountAmount Decimal          @default(0) @map("discount_amount") @db.Decimal(15, 2)
+  finalAmount    Decimal          @default(0) @map("final_amount") @db.Decimal(15, 2)
+  createdBy      String?          @map("created_by") @db.Uuid
+  createdAt      DateTime?        @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime?        @default(now()) @map("updated_at") @db.Timestamp(6)
+  deletedAt      DateTime?        @map("deleted_at") @db.Timestamp(6)
+  items          OrderItem[]
+  users          User?            @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  customer       BusinessPartner? @relation(fields: [customerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  shipments      Shipment[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id            String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orderId       String?        @map("order_id") @db.Uuid
+  productId     String?        @map("product_id") @db.Uuid
+  quantity      Decimal        @db.Decimal(15, 2)
+  unitPrice     Decimal        @map("unit_price") @db.Decimal(15, 2)
+  totalPrice    Decimal        @map("total_price") @db.Decimal(15, 2)
+  order         Order?         @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  product       Product?       @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  shipmentItems ShipmentItem[]
+
+  @@map("order_items")
+}
+
+model Shipment {
+  id             String         @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  orderId        String?        @map("order_id") @db.Uuid
+  shipmentNumber String         @unique @map("shipment_number") @db.VarChar(50)
+  status         String         @db.VarChar(50)
+  deliveryDate   DateTime?      @map("delivery_date") @db.Timestamp(6)
+  createdAt      DateTime?      @default(now()) @map("created_at") @db.Timestamp(6)
+  deletedAt      DateTime?      @map("deleted_at") @db.Timestamp(6)
+  items          ShipmentItem[]
+  order          Order?         @relation(fields: [orderId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("shipments")
+}
+
+model ShipmentItem {
+  id                String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  shipmentId        String?    @map("shipment_id") @db.Uuid
+  orderItemId       String?    @map("order_item_id") @db.Uuid
+  deliveredQuantity Decimal    @map("delivered_quantity") @db.Decimal(15, 2)
+  orderItem         OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  shipment          Shipment?  @relation(fields: [shipmentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("shipment_items")
+}
+
+model AccountingPeriod {
+  id          String       @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  periodName  String       @unique @map("period_name") @db.VarChar(20)
+  startDate   DateTime     @map("start_date") @db.Date
+  endDate     DateTime     @map("end_date") @db.Date
+  isClosed    Boolean?     @default(false) @map("is_closed")
+  closedAt    DateTime?    @map("closed_at") @db.Timestamp(6)
+  closedBy    String?      @map("closed_by") @db.Uuid
+  users       User?        @relation(fields: [closedBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  debt_ledger DebtLedger[]
+
+  @@map("accounting_periods")
+}
+
+model DebtLedger {
+  id                 String            @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  partnerId          String?           @map("partner_id") @db.Uuid
+  transactionType    String            @map("transaction_type") @db.VarChar(20)
+  amount             Decimal           @db.Decimal(15, 2)
+  balanceAfter       Decimal           @map("balance_after") @db.Decimal(15, 2)
+  referenceId        String?           @map("reference_id") @db.Uuid
+  periodId           String?           @map("period_id") @db.Uuid
+  createdAt          DateTime?         @default(now()) @map("created_at") @db.Timestamp(6)
+  partner            BusinessPartner?  @relation(fields: [partnerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  accounting_periods AccountingPeriod? @relation(fields: [periodId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("debt_ledger")
+}
+
+model Payment {
+  id                String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  paymentNumber     String              @unique @map("payment_number") @db.VarChar(50)
+  partnerId         String?             @map("partner_id") @db.Uuid
+  amount            Decimal             @db.Decimal(15, 2)
+  paymentMethod     String?             @map("payment_method") @db.VarChar(50)
+  unallocatedAmount Decimal             @map("unallocated_amount") @db.Decimal(15, 2)
+  receivedDate      DateTime?           @default(now()) @map("received_date") @db.Timestamp(6)
+  createdBy         String?             @map("created_by") @db.Uuid
+  allocations       PaymentAllocation[]
+  users             User?               @relation(fields: [createdBy], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  partner           BusinessPartner?    @relation(fields: [partnerId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id              String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  paymentId       String?   @map("payment_id") @db.Uuid
+  invoiceId       String?   @map("invoice_id") @db.Uuid
+  allocatedAmount Decimal   @map("allocated_amount") @db.Decimal(15, 2)
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  payment         Payment?  @relation(fields: [paymentId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("payment_allocations")
+}
+
+model IdempotencyKey {
+  key            String    @id @db.VarChar(255)
+  requestPath    String    @map("request_path") @db.VarChar(255)
+  responseBody   Json?     @map("response_body")
+  responseStatus Int?      @map("response_status")
+  createdAt      DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@map("idempotency_keys")
+}
+
+model OutboxEvent {
+  id            String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  aggregateType String    @map("aggregate_type") @db.VarChar(50)
+  aggregateId   String    @map("aggregate_id") @db.Uuid
+  eventType     String    @map("event_type") @db.VarChar(100)
+  payload       Json
+  status        String?   @default("PENDING") @db.VarChar(20)
+  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  processedAt   DateTime? @map("processed_at") @db.Timestamp(6)
+
+  @@map("outbox_events")
+}
+
+model DailyStat {
+  statDate           DateTime  @id @map("stat_date") @db.Date
+  totalRevenue       Decimal?  @default(0) @map("total_revenue") @db.Decimal(15, 2)
+  totalDebt          Decimal?  @default(0) @map("total_debt") @db.Decimal(15, 2)
+  topSellingProducts Json?     @map("top_selling_products")
+  updatedAt          DateTime? @default(now()) @map("updated_at") @db.Timestamp(6)
+
+  @@map("daily_stats")
+}
