@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AuthModule } from './modules/auth/auth.module';
 // Import các Module tương lai (hiện tại có thể tạo file trống để setup)
 // import { CatalogModule } from './modules/catalog/catalog.module';
 // import { InventoryModule } from './modules/inventory/inventory.module';
@@ -18,9 +19,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: 'localhost',
-      port: 5433,
-      username: 'erp_admin',
-      password: '123456',
+      port: 5432,
+      username: 'postgres', // erp_admin
+      password: 'Sanh123202',
       database: 'mini_erp_b2b',
       autoLoadEntities: true,
       synchronize: false,
@@ -31,6 +32,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     // InventoryModule,
     // SalesModule,
     // FinanceModule,
+    AuthModule,
   ],
   controllers: [],
   providers: [],

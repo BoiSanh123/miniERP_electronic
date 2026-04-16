@@ -42,9 +42,17 @@ async function main() {
   const adminRole = await prisma.role.findUnique({ where: { name: "ADMIN" } });
   if (adminRole) {
     await prisma.userRole.upsert({
-      where: { userId_roleId: { userId: admin.id, roleId: adminRole.id } },
+      where: {
+        user_id_role_id: {
+          user_id: admin.id,
+          role_id: adminRole.id,
+        },
+      },
       update: {},
-      create: { userId: admin.id, roleId: adminRole.id }
+      create: {
+        user_id: admin.id,
+        role_id: adminRole.id,
+      }
     });
   }
 
@@ -85,8 +93,8 @@ async function main() {
       displayUnit: "cuộn",
       attributes: { section: "2x2.5", type: "cable", unit: "meter" },
       isActive: true,
-      standardCost: "12500.00",
-      listPrice: "18000.00"
+      // standardCost: "12500.00",
+      // listPrice: "18000.00"
     }
   });
 
